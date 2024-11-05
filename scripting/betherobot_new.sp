@@ -45,7 +45,7 @@ new Handle:cvarSounds, Handle:cvarTaunts, Handle:cvarCooldown;
 public MRESReturn CBaseAnimating_HandleAnimEvent(int pThis, Handle hParams)
 {
 	int event = DHookGetParamObjectPtrVar(hParams, 1, 0, ObjectValueType_Int); 
-	if (!IsValidClient(pThis) || IsValidClient(pThis) && !IsPlayerAlive(pThis))
+	if (!IsValidClient(pThis) || IsValidClient(pThis) && !IsPlayerAlive(pThis) || !GetConVarBool(cvarSounds))
 		return MRES_Ignored;
 	if (Status[pThis] == RobotStatus_Robot) {
 		if (event == 7001 || event == 59 || event == 58 || event == 66 || event == 65 || event == 6004 || event == 6005 || event == 7005 || event == 7004)
