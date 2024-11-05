@@ -167,6 +167,7 @@ public OnMapEnd()
 
 public OnClientPutInServer(iClient)
 {
+	Status[iClient] = RobotStatus_Human;
 	g_flLastTransformTime[iClient] = 0.0;
 	flStepThen[iClient] = 0.0;
 	Locked1[iClient] = false;
@@ -179,6 +180,7 @@ public OnClientPutInServer(iClient)
 }
 public OnClientDisconnect(iClient)
 {
+	Status[iClient] = RobotStatus_Human;
 	g_flLastTransformTime[iClient] = 0.0;
 	flStepThen[iClient] = 0.0;
 	Locked1[iClient] = false;
@@ -439,6 +441,10 @@ stock bool:ToggleGiant(iClient, bool:toggle = bool:2)
 		
 		fOldStepTime = GetEntPropFloat(iClient, Prop_Data, "m_flStepSoundTime");
 		fOldStepSize = GetEntPropFloat(iClient, Prop_Data, "m_flStepSize");
+		if (AnimEventHook[iClient] != -1) {
+			DHookRemoveHookID(AnimEventHook[iClient]);
+		}
+		AnimEventHook[iClient] = DHookEntity(g_hHandleAnimEvent, true, iClient, _, CBaseAnimating_HandleAnimEvent);
 	}
 	else if (!toggle || (toggle == bool:2 && Status[iClient] == RobotStatus_Robot))
 	{
