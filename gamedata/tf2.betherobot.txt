@@ -1,0 +1,44 @@
+"Games"
+{
+	"tf"
+	{
+		"Offsets"
+		{
+			"CBaseAnimating::DispatchAnimEvents"
+			{
+				"linux"		"213"
+				"windows"	"212"
+			}
+			"CBaseAnimating::HandleAnimEvent"
+			{
+				"linux"		"214"
+				"windows"	"213"
+			}		
+		}
+		"Signatures"
+		{
+			"__GetAnimationEvent__"
+			{
+				"library"		"server"
+				"windows"		"\x55\x8B\xEC\x53\x56\x8B\x75\x2A\x57\x85\xF6\x0F\x84\x2A\x2A\x2A\x2A\x8B\xCE"
+				"linux"			"@_Z17GetAnimationEventP10CStudioHdriP11animevent_tffi"
+			}
+		}
+		"Addresses"
+		{		
+			"GetAnimationEvent"
+			{
+				"windows"
+				{
+					"signature"	"__GetAnimationEvent__"
+					"offset"	"131"
+				}
+				"linux"
+				{
+					"signature"	"__GetAnimationEvent__"
+					"offset"	"204"
+				}
+			}
+		}
+	}
+}
