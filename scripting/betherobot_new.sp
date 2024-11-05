@@ -113,6 +113,12 @@ public OnPluginStart()
 	StoreToAddress(iAddr, 9999, NumberType_Int16); 
 
 	delete hConf;
+	for (new iClient = 1; iClient <= MaxClients; iClient++)
+	{
+		if (IsValidEntity(iClient) && !IsClientSourceTV(iClient) && !IsClientReplay(iClient)) {
+			OnClientPutInServer(iClient);
+		}
+	}
 }
 
 
@@ -168,6 +174,7 @@ public OnClientPutInServer(iClient)
 	Locked3[iClient] = false;
 	CanWindDown[iClient] = false;
 	FixSounds(iClient);
+	AnimEventHook[iClient] = DHookEntity(g_hHandleAnimEvent, true, iClient, _, CBaseAnimating_HandleAnimEvent);
 
 }
 public OnClientDisconnect(iClient)
@@ -227,7 +234,7 @@ public Action:Command_Robot(iClient, nArgs)
 	{
 		new String:arg0[24];
 		GetCmdArg(0, arg0, sizeof(arg0));
-		ReplyToCommand(iClient, "[SM] Usage: %s <name|#userid> [1/0] - Transforms a player into a giant robot.", arg0);
+		ReplyToCommand(iClient, "[SM] Usage: %s <name|#userid> [1/0] - Transforms a player into a robot.", arg0);
 		return Plugin_Handled;
 	}
 	
@@ -266,7 +273,7 @@ public Action:Command_Robot(iClient, nArgs)
 		ToggleGiant(target_list[i], toggle);
 	}
 	if (toggle != false && toggle != true) ShowActivity2(iClient, "[SM] ", "Toggled being a robot on %s.", target_name);
-	else ShowActivity2(iClient, "[SM] ", "%sabled giant robot on %s.", toggle ? "En" : "Dis", target_name);
+	else ShowActivity2(iClient, "[SM] ", "%sabled robot on %s.", toggle ? "En" : "Dis", target_name);
 	return Plugin_Handled;
 }
 
@@ -370,8 +377,7 @@ public Action:SoundHook(iClients[64], &numClients, String:sSound[PLATFORM_MAX_PA
 	else if(StrContains(sSound, "physics/flesh/flesh_impact_bullet", false) != -1)
 	{
 		Format(sSound, sizeof(sSound), "physics/metal/metal_solid_impact_bullet%i.wav", GetRandomInt(1,4));
-		iPitch = GetRandomInt(95,100);
-		EmitSoundToAll(sSound, iClient, SNDCHAN_STATIC, 95, SND_CHANGEVOL, 0.75, iPitch);
+		EmitSoundToAll(sSound, iClient, SNDCHAN_BODY, 95, SND_CHANGEVOL, 1, 100);
 		return Plugin_Stop;
 	}
 
@@ -418,7 +424,6 @@ stock bool:ToggleGiant(iClient, bool:toggle = bool:2)
 		SetVariantString(sModel);
 		AcceptEntityInput(iClient, "SetCustomModel");
 		SetEntProp(iClient, Prop_Send, "m_bUseClassAnimations", 1);
-		DHookEntity(g_hHandleAnimEvent, true, iClient, _, CBaseAnimating_HandleAnimEvent);
 		
 		g_flLastTransformTime[iClient] = GetTickedTime();
 		Status[iClient] = RobotStatus_Robot;
@@ -645,7 +650,8 @@ stock AttachParticle(entity, String:particleType[])
     {
         decl Float:pos[3] ;
         GetEntPropVector(entity, Prop_Send, "m_vecOrigin", pos);
-        pos[2] += 74;
+	// nah....
+        //pos[2] += 74;
         TeleportEntity(particle, pos, NULL_VECTOR, NULL_VECTOR);
 
         Format(tName, sizeof(tName), "target%i", entity);
