@@ -188,6 +188,7 @@ public OnPlayerDeath(Handle:hEvent, const String:strEventName[], bool:bDontBroad
 	if(Status[iClient] != RobotStatus_Human)
 	{
 		FixSounds(iClient);
+		AttachParticle(iClient,"bot_death");
 	}
 }
 
@@ -633,4 +634,34 @@ stock StopSnd(iEntity, const String:sSound[PLATFORM_MAX_PATH], iChannel = SNDCHA
 PrecacheSounds()
 {
 	PrecacheScriptSound("MVM.BotStep");
+}
+
+stock AttachParticle(entity, String:particleType[])
+{
+    new particle = CreateEntityByName("info_particle_system");
+    decl String:tName[128];
+
+    if(IsValidEdict(particle))
+    {
+        decl Float:pos[3] ;
+        GetEntPropVector(entity, Prop_Send, "m_vecOrigin", pos);
+        pos[2] += 74;
+        TeleportEntity(particle, pos, NULL_VECTOR, NULL_VECTOR);
+
+        Format(tName, sizeof(tName), "target%i", entity);
+
+        DispatchKeyValue(entity, "targetname", tName);
+        DispatchKeyValue(particle, "targetname", "tf2particle");
+        DispatchKeyValue(particle, "parentname", tName);
+        DispatchKeyValue(particle, "effect_name", particleType);
+        DispatchSpawn(particle);
+
+        SetVariantString(tName);
+        SetVariantString("flag");
+        ActivateEntity(particle);
+        AcceptEntityInput(particle, "start");
+
+        return particle;
+    }
+    return -1;
 }
