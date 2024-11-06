@@ -40,7 +40,7 @@ new int:AnimEventHook[MAXPLAYERS+1];
 Handle g_hHandleAnimEvent;
 Handle g_hDispatchAnimEvents;
 
-new Handle:cvarSounds, Handle:cvarTaunts, Handle:cvarCooldown;
+new Handle:cvarSounds, Handle:cvarTaunts, Handle:cvarCooldown, Handle:cvarBotsAreRobots;
 
 public MRESReturn CBaseAnimating_HandleAnimEvent(int pThis, Handle hParams)
 {
@@ -51,7 +51,9 @@ public MRESReturn CBaseAnimating_HandleAnimEvent(int pThis, Handle hParams)
 		if (event == 7001 || event == 59 || event == 58 || event == 66 || event == 65 || event == 6004 || event == 6005 || event == 7005 || event == 7004)
 		{
 			if (GetEntityFlags(pThis) & FL_ONGROUND)
-			{
+			{	
+				if (TF2_IsPlayerInCondition(pThis,TFCond_Cloaked) || TF2_IsPlayerInCondition(pThis,TFCond_Disguised))
+					return MRES_Ignored;
 				static char strSound[64];
 				switch(GetRandomInt(1,2))
 				{
@@ -86,6 +88,7 @@ public OnPluginStart()
 	cvarSounds = CreateConVar("sm_betherobot_reworked_sounds", "1", "If on, robots will emit robotic class sounds instead of their usual sounds.", FCVAR_NONE, true, 0.0, true, 1.0);
 	cvarTaunts = CreateConVar("sm_betherobot_reworked_taunts", "1", "If on, robots can taunt. Most robot taunts are...incorrect. And some taunt kills don't play an animation for the killing part.", FCVAR_NONE, true, 0.0, true, 1.0);
 	cvarCooldown = CreateConVar("sm_betherobot_reworked_cooldown", "2.0", "If greater than 0, players must wait this long between enabling/disabling robot on themselves. Set to 0.0 to disable.", FCVAR_NONE, true, 0.0);
+	cvarBotsAreRobots = CreateConVar("sm_betherobot_bots_are_robots", "0", "If enabled, all bots turn into robots.", FCVAR_ARCHIVE, true, 0.0);
 	
 	CreateTimer(0.0, Timer_HalfSecond, _, TIMER_REPEAT|TIMER_FLAG_NO_MAPCHANGE);
 
@@ -176,6 +179,12 @@ public OnClientPutInServer(iClient)
 	CanWindDown[iClient] = false;
 	FixSounds(iClient);
 	AnimEventHook[iClient] = DHookEntity(g_hHandleAnimEvent, true, iClient, _, CBaseAnimating_HandleAnimEvent);
+	SDKHook(iClient, SDKHook_OnTakeDamage, Robot_OnTakeDamage);
+	if (GetConVarBool(cvarBotsAreRobots)) {
+		if (IsFakeClient(iClient)) {
+			Status[iClient] = RobotStatus_Robot;
+		}
+	}
 
 }
 public OnClientDisconnect(iClient)
@@ -216,9 +225,9 @@ public Action:Event_Inventory(Handle:hEvent, const String:strEventName[], bool:b
 	{
 		new Float:cooldown = GetConVarFloat(cvarCooldown), bool:immediate;
 		if (g_flLastTransformTime[iClient] + cooldown <= GetTickedTime()) immediate = true;
-		ToggleGiant(iClient, false);
+		ToggleRobot(iClient, false);
 		if (immediate) g_flLastTransformTime[iClient] = 0.0;
-		ToggleGiant(iClient, true);
+		ToggleRobot(iClient, true);
 	}
 }
 
@@ -243,7 +252,7 @@ public Action:Command_Robot(iClient, nArgs)
 	new String:arg1[MAX_TARGET_LENGTH], String:arg2[4], bool:toggle = bool:2;
 	if (nArgs > 1 && !CheckCommandAccess(iClient, "giant_admin", ADMFLAG_CHEATS))
 	{
-		//if (!ToggleGiant(iClient)) ReplyToCommand(iClient, "[SM] You can't be a giant right now, but you'll be one as soon as you can.");
+		//if (!ToggleRobot(iClient)) ReplyToCommand(iClient, "[SM] You can't be a giant right now, but you'll be one as soon as you can.");
 		ReplyToCommand(iClient, "[SM] You don't have access to targeting others.");
 		return Plugin_Handled;
 	}
@@ -272,7 +281,7 @@ public Action:Command_Robot(iClient, nArgs)
 			ReplyToCommand(iClient, "[SM] They can't be a robot. Accepted classes are: Scout, Pyro, Heavy, Demo, Medic, Soldier, Sniper, Spy, Engineer");
 			return Plugin_Handled;
 		}
-		ToggleGiant(target_list[i], toggle);
+		ToggleRobot(target_list[i], toggle);
 	}
 	if (toggle != false && toggle != true) ShowActivity2(iClient, "[SM] ", "Toggled being a robot on %s.", target_name);
 	else ShowActivity2(iClient, "[SM] ", "%sabled robot on %s.", toggle ? "En" : "Dis", target_name);
@@ -295,7 +304,7 @@ public Action:Command_Human(iClient, nArgs)
 	new String:arg1[MAX_TARGET_LENGTH], String:arg2[4], bool:toggle = bool:2;
 	if (nArgs > 1 && !CheckCommandAccess(iClient, "giant_admin", ADMFLAG_CHEATS))
 	{
-		//if (!ToggleGiant(iClient)) ReplyToCommand(iClient, "[SM] You can't be a giant right now, but you'll be one as soon as you can.");
+		//if (!ToggleRobot(iClient)) ReplyToCommand(iClient, "[SM] You can't be a giant right now, but you'll be one as soon as you can.");
 		ReplyToCommand(iClient, "[SM] You don't have access to targeting others.");
 		return Plugin_Handled;
 	}
@@ -324,7 +333,7 @@ public Action:Command_Human(iClient, nArgs)
 			ReplyToCommand(iClient, "[SM] They can't be a robot. Accepted classes are: Scout, Pyro, Heavy, Demo, Medic, Soldier, Sniper, Spy, Engineer");
 			return Plugin_Handled;
 		}
-		ToggleGiant(target_list[i], false);
+		ToggleRobot(target_list[i], false);
 	}
 	ShowActivity2(iClient, "[SM] ", "Disabled being a robot on %s.", target_name);
 	return Plugin_Handled;
@@ -379,7 +388,7 @@ public Action:SoundHook(iClients[64], &numClients, String:sSound[PLATFORM_MAX_PA
 	else if(StrContains(sSound, "physics/flesh/flesh_impact_bullet", false) != -1)
 	{
 		Format(sSound, sizeof(sSound), "physics/metal/metal_solid_impact_bullet%i.wav", GetRandomInt(1,4));
-		EmitSoundToAll(sSound, iClient, SNDCHAN_BODY, 95, SND_CHANGEVOL, 1, 100);
+		//EmitSoundToAll(sSound, iClient, SNDCHAN_BODY, 95, SND_CHANGEVOL, 1.0, 100);
 		return Plugin_Stop;
 	}
 
@@ -406,7 +415,44 @@ public Action:OnPlayerRunCmd(iClient, &iButtons, &iImpulse, Float:flVelocity[3],
 /*-=-=-=-=-=-Natives and stocks are below this point-=-=-=-=-=-*/
 /*                                                             */
 
-stock bool:ToggleGiant(iClient, bool:toggle = bool:2)
+public Action:Robot_OnTakeDamage(victim, &attacker, &inflictor, &Float:damage, &damagetype, &weapon, Float:damageForce[3], Float:damagePosition[3], damagecustom)
+{
+	if (Status[victim] == RobotStatus_Robot) {
+		if (damagetype & DMG_BULLET)
+		{
+			decl String:sSound[PLATFORM_MAX_PATH]
+			Format(sSound, sizeof(sSound), "physics/metal/metal_solid_impact_bullet%i.wav", GetRandomInt(1,4));
+			EmitSoundToAll(sSound, victim, SNDCHAN_BODY, 95, SND_CHANGEVOL, 1.0, 100);
+			new particle = CreateEntityByName("info_particle_system");
+			decl String:tName[128];
+
+			if(IsValidEdict(particle))
+			{
+			// nah....
+				//pos[2] += 74;
+				TeleportEntity(particle, damagePosition, NULL_VECTOR, NULL_VECTOR);
+
+				Format(tName, sizeof(tName), "target%i", victim);
+
+				DispatchKeyValue(victim, "targetname", tName);
+				DispatchKeyValue(particle, "targetname", "tf2particle");
+				DispatchKeyValue(particle, "parentname", tName);
+				DispatchKeyValue(particle, "effect_name", "bot_impact_heavy");
+				DispatchSpawn(particle);
+
+				SetVariantString(tName);
+				SetVariantString("flag");
+				ActivateEntity(particle);
+				AcceptEntityInput(particle, "start");
+				CreateTimer(0.25, Timer_Kill, particle); 
+			}
+			
+		}
+		return Plugin_Changed;
+	}
+}
+
+stock bool:ToggleRobot(iClient, bool:toggle = bool:2)
 {
 	if (Status[iClient] == RobotStatus_WantsToBeRobot && toggle != false && toggle != true) return true;
 	if (!Status[iClient] && !toggle) return true;
@@ -515,7 +561,7 @@ public Action:Timer_HalfSecond(Handle:hTimer)
 			continue;
 			
 		if (Status[iClient] == RobotStatus_WantsToBeRobot)
-			ToggleGiant(iClient, true);
+			ToggleRobot(iClient, true);
 		else if (Status[iClient] != RobotStatus_Robot)
 			FixSounds(iClient);
 	}
@@ -523,6 +569,11 @@ public Action:Timer_HalfSecond(Handle:hTimer)
 
 public Action:Timer_ModifyItems(Handle:hTimer, any:iClient)
 {
+}
+
+public Action:Timer_Kill(Handle:hTimer, any:iEntity)
+{
+	AcceptEntityInput(iEntity, "Kill")
 }
 
 SetAttributes(iClient, iHealth = 3000, Float:flSpeed = 0.5, Float:flForceReduct, Float:flAirblastVuln, Float:flFootstep = 0.0)
@@ -673,6 +724,7 @@ stock AttachParticle(entity, String:particleType[])
         ActivateEntity(particle);
         AcceptEntityInput(particle, "start");
 
+		CreateTimer(0.25, Timer_Kill, particle); 
         return particle;
     }
     return -1;
