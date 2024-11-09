@@ -50,19 +50,78 @@ public MRESReturn CBaseAnimating_HandleAnimEvent(int pThis, Handle hParams)
 	if (Status[pThis] == RobotStatus_Robot) {
 		if (event == 7001 || event == 59 || event == 58 || event == 66 || event == 65 || event == 6004 || event == 6005 || event == 7005 || event == 7004)
 		{
+			new isMiniBoss = view_as<bool>(GetEntProp(pThis, Prop_Send, "m_bIsMiniBoss"));
+			int iClient = pThis;
+			if (isMiniBoss) {
+				decl String:m_plrModelName[PLATFORM_MAX_PATH];
+				GetEntPropString(iClient, Prop_Data, "m_ModelName", m_plrModelName, sizeof(m_plrModelName));
+				if (StrContains(m_plrModelName,"boss") == -1) {
+						
+					decl String:sClassname[12];
+					TF2_GetNameOfClass(TF2_GetPlayerClass(iClient), sClassname, sizeof(sClassname));
+					
+					decl String:sModel[PLATFORM_MAX_PATH];
+					Format(sModel, sizeof(sModel), "models/bots/%s_boss/bot_%s_boss.mdl", sClassname, sClassname);
+					
+					SetVariantString(sModel);
+					AcceptEntityInput(iClient, "SetCustomModel");
+					SetEntProp(iClient, Prop_Send, "m_bUseClassAnimations", 1);
+				}
+			} else {
+				decl String:m_plrModelName[PLATFORM_MAX_PATH];
+				GetEntPropString(iClient, Prop_Data, "m_ModelName", m_plrModelName, sizeof(m_plrModelName));
+				if (StrContains(m_plrModelName,"boss") != -1) {
+						
+					decl String:sClassname[12];
+					TF2_GetNameOfClass(TF2_GetPlayerClass(iClient), sClassname, sizeof(sClassname));
+					
+					decl String:sModel[PLATFORM_MAX_PATH];
+					Format(sModel, sizeof(sModel), "models/bots/%s/bot_%s.mdl", sClassname, sClassname);
+					
+					SetVariantString(sModel);
+					AcceptEntityInput(iClient, "SetCustomModel");
+					SetEntProp(iClient, Prop_Send, "m_bUseClassAnimations", 1);
+				}
+			}
 			if (GetEntityFlags(pThis) & FL_ONGROUND)
 			{	
 				if (TF2_IsPlayerInCondition(pThis,TFCond_Cloaked) || TF2_IsPlayerInCondition(pThis,TFCond_Disguised))
 					return MRES_Ignored;
 				static char strSound[64];
-				switch(GetRandomInt(1,2))
-				{
-					case 1:	Format(strSound, sizeof(strSound), "mvm/player/footsteps/robostep_0%i.wav", GetRandomInt(1,9));
-					case 2: Format(strSound, sizeof(strSound), "mvm/player/footsteps/robostep_%i.wav", GetRandomInt(10,18));
+				if (isMiniBoss) {
+					Format(strSound, sizeof(strSound), "^mvm/giant_common/giant_common_step_0%i.wav", GetRandomInt(1,8));
+					PrecacheSound(strSound);
+					if (TF2_GetPlayerClass(pThis) == TFClass_Scout) {
+						EmitSoundToAll(strSound,pThis,SNDCHAN_STATIC,87,_,0.6,100);
+					} else if (TF2_GetPlayerClass(pThis) == TFClass_Soldier || TF2_GetPlayerClass(pThis) == TFClass_Pyro || TF2_GetPlayerClass(pThis) == TFClass_DemoMan || TF2_GetPlayerClass(pThis) == TFClass_Heavy) {
+						EmitSoundToAll(strSound,pThis,SNDCHAN_STATIC,95,_,0.65,100);		
+					}
+				} else {
 
+					if (TF2_GetPlayerClass(pThis) != TFClass_Medic) {
+
+						switch(GetRandomInt(1,2))
+						{
+							case 1:	Format(strSound, sizeof(strSound), "mvm/player/footsteps/robostep_0%i.wav", GetRandomInt(1,9));
+							case 2: Format(strSound, sizeof(strSound), "mvm/player/footsteps/robostep_%i.wav", GetRandomInt(10,18));
+						}
+
+						PrecacheSound(strSound);
+						EmitSoundToAll(strSound,pThis,SNDCHAN_STATIC,87,_,0.35,GetRandomInt(95,100));
+
+					} else {
+
+						switch(GetRandomInt(1,2))
+						{
+							case 1:	Format(strSound, sizeof(strSound), "items/cart_rolling_start.wav");
+							case 2: Format(strSound, sizeof(strSound), "items/cart_rolling_stop.wav");
+						}
+
+						PrecacheSound(strSound);
+						EmitSoundToAll(strSound,pThis,SNDCHAN_STATIC,87,_,0.35,GetRandomInt(95,100));	
+
+					}
 				}
-				PrecacheSound(strSound);
-				EmitSoundToAll(strSound,pThis,SNDCHAN_STATIC,87,_,0.35,GetRandomInt(95,100));
 			}
 		}
 	}
@@ -90,7 +149,7 @@ public OnPluginStart()
 	cvarCooldown = CreateConVar("sm_betherobot_reworked_cooldown", "2.0", "If greater than 0, players must wait this long between enabling/disabling robot on themselves. Set to 0.0 to disable.", FCVAR_NONE, true, 0.0);
 	cvarBotsAreRobots = CreateConVar("sm_betherobot_bots_are_robots", "0", "If enabled, all bots turn into robots.", FCVAR_ARCHIVE, true, 0.0);
 	
-	CreateTimer(0.0, Timer_HalfSecond, _, TIMER_REPEAT|TIMER_FLAG_NO_MAPCHANGE);
+	CreateTimer(0.5, Timer_HalfSecond, _, TIMER_REPEAT|TIMER_FLAG_NO_MAPCHANGE);
 
 	Handle hConf = LoadGameConfigFile("tf2.betherobot");
 
@@ -148,6 +207,8 @@ public OnMapStart()
 	{
 		TF2_GetNameOfClass(iClass, sClassname, sizeof(sClassname));
 		Format(sModel, sizeof(sModel), "models/bots/%s_boss/bot_%s_boss.mdl", sClassname, sClassname);
+		PrecacheModel(sModel, true);
+		Format(sModel, sizeof(sModel), "models/bots/%s/bot_%s.mdl", sClassname, sClassname);
 		PrecacheModel(sModel, true);
 	}
 	
@@ -378,6 +439,39 @@ public Action:SoundHook(iClients[64], &numClients, String:sSound[PLATFORM_MAX_PA
 	if(!IsValidClient(iClient) || Status[iClient] != RobotStatus_Robot)
 		return Plugin_Continue;
 
+	new isMiniBoss = view_as<bool>(GetEntProp(iClient, Prop_Send, "m_bIsMiniBoss"));
+	if (isMiniBoss) {
+        decl String:m_plrModelName[PLATFORM_MAX_PATH];
+        GetEntPropString(iClient, Prop_Data, "m_ModelName", m_plrModelName, sizeof(m_plrModelName));
+		if (StrContains(m_plrModelName,"boss") == -1) {
+				
+			decl String:sClassname[12];
+			TF2_GetNameOfClass(TF2_GetPlayerClass(iClient), sClassname, sizeof(sClassname));
+			
+			decl String:sModel[PLATFORM_MAX_PATH];
+			Format(sModel, sizeof(sModel), "models/bots/%s_boss/bot_%s_boss.mdl", sClassname, sClassname);
+			
+			SetVariantString(sModel);
+			AcceptEntityInput(iClient, "SetCustomModel");
+			SetEntProp(iClient, Prop_Send, "m_bUseClassAnimations", 1);
+		}
+	} else {
+        decl String:m_plrModelName[PLATFORM_MAX_PATH];
+        GetEntPropString(iClient, Prop_Data, "m_ModelName", m_plrModelName, sizeof(m_plrModelName));
+		if (StrContains(m_plrModelName,"boss") != -1) {
+				
+			decl String:sClassname[12];
+			TF2_GetNameOfClass(TF2_GetPlayerClass(iClient), sClassname, sizeof(sClassname));
+			
+			decl String:sModel[PLATFORM_MAX_PATH];
+			Format(sModel, sizeof(sModel), "models/bots/%s/bot_%s.mdl", sClassname, sClassname);
+			
+			SetVariantString(sModel);
+			AcceptEntityInput(iClient, "SetCustomModel");
+			SetEntProp(iClient, Prop_Send, "m_bUseClassAnimations", 1);
+		}
+	}
+
 	if(StrContains(sSound, "weapons/fx/rics/arrow_impact_flesh", false) != -1)
 	{
 		Format(sSound, sizeof(sSound), "weapons/fx/rics/arrow_impact_metal%i.wav", GetRandomInt(2,4));
@@ -391,20 +485,41 @@ public Action:SoundHook(iClients[64], &numClients, String:sSound[PLATFORM_MAX_PA
 		//EmitSoundToAll(sSound, iClient, SNDCHAN_BODY, 95, SND_CHANGEVOL, 1.0, 100);
 		return Plugin_Stop;
 	}
-
 	if (StrContains(sSound, "vo/", false) == -1 || StrContains(sSound, "announcer", false) != -1)
 		return Plugin_Continue;
 
-	ReplaceString(sSound, sizeof(sSound), "vo/", "vo/mvm/norm/", false);
-	ReplaceString(sSound, sizeof(sSound), ".wav", ".mp3", false);
+	decl String:sSample[PLATFORM_MAX_PATH];
+	Format(sSample, sizeof(sSample), "%s", sSound);
+	if (isMiniBoss) {
+		ReplaceString(sSample, sizeof(sSample), "vo/", "vo/mvm/mght/", false);
+	} else {
+		ReplaceString(sSample, sizeof(sSample), "vo/", "vo/mvm/norm/", false);
+	}
+	ReplaceString(sSample, sizeof(sSample), ".wav", ".mp3", false);
 	
-	new String:sClassname_MVM[12], String:sClassname[12];
+	new String:sClassname_MVM[64], String:sClassname[64];
 	TF2_GetNameOfClass(TF2_GetPlayerClass(iClient), sClassname, sizeof(sClassname));
 	ReplaceString(sClassname, sizeof(sClassname), "demo", "demoman", true);
-	Format(sClassname_MVM, sizeof(sClassname_MVM), "%s_mvm", sClassname);
-	ReplaceString(sSound, sizeof(sSound), sClassname, sClassname_MVM, false);
-	PrecacheSound(sSound);
-	return Plugin_Changed;
+	
+	if (isMiniBoss) {
+		Format(sClassname_MVM, sizeof(sClassname_MVM), "%s_mvm_m", sClassname);
+		if (StrContains(sSample,"_pain") != -1) {
+			flVolume = 0.0;
+		}
+	} else {
+		Format(sClassname_MVM, sizeof(sClassname_MVM), "%s_mvm", sClassname);
+	}
+	ReplaceString(sSample, sizeof(sSample), sClassname, sClassname_MVM, false);
+	PrecacheSound(sSample);
+	
+	decl String:sample[PLATFORM_MAX_PATH];
+	Format(sample, sizeof(sample), "sound/%s", sSample);
+	if (FileExists(sample,true)) {
+		EmitSoundToAll(sSample, iClient, iChannel, iLevel, fFlags, flVolume, iPitch);
+		return Plugin_Stop;
+	} else {
+		return Plugin_Changed;
+	}
 }
 
 public Action:OnPlayerRunCmd(iClient, &iButtons, &iImpulse, Float:flVelocity[3], Float:flAngle[3], &iWeapon)
@@ -418,11 +533,11 @@ public Action:OnPlayerRunCmd(iClient, &iButtons, &iImpulse, Float:flVelocity[3],
 public Action:Robot_OnTakeDamage(victim, &attacker, &inflictor, &Float:damage, &damagetype, &weapon, Float:damageForce[3], Float:damagePosition[3], damagecustom)
 {
 	if (Status[victim] == RobotStatus_Robot) {
-		if (damagetype & DMG_BULLET)
+		if (damagetype & DMG_BULLET || damagetype & DMG_BUCKSHOT)
 		{
 			decl String:sSound[PLATFORM_MAX_PATH]
 			Format(sSound, sizeof(sSound), "physics/metal/metal_solid_impact_bullet%i.wav", GetRandomInt(1,4));
-			EmitSoundToAll(sSound, victim, SNDCHAN_BODY, 95, SND_CHANGEVOL, 1.0, 100);
+			EmitSoundToAll(sSound, victim, SNDCHAN_BODY, 80, SND_CHANGEVOL, 0.9, 100);
 			new particle = CreateEntityByName("info_particle_system");
 			decl String:tName[128];
 
@@ -467,7 +582,12 @@ stock bool:ToggleRobot(iClient, bool:toggle = bool:2)
 		TF2_GetNameOfClass(TF2_GetPlayerClass(iClient), sClassname, sizeof(sClassname));
 		
 		decl String:sModel[PLATFORM_MAX_PATH];
-		Format(sModel, sizeof(sModel), "models/bots/%s/bot_%s.mdl", sClassname, sClassname);
+		new isMiniBoss = view_as<bool>(GetEntProp(iClient, Prop_Send, "m_bIsMiniBoss"));
+		if (isMiniBoss) {
+			Format(sModel, sizeof(sModel), "models/bots/%s_boss/bot_%s_boss.mdl", sClassname, sClassname);
+		} else {
+			Format(sModel, sizeof(sModel), "models/bots/%s/bot_%s.mdl", sClassname, sClassname);
+		}
 		
 		SetVariantString(sModel);
 		AcceptEntityInput(iClient, "SetCustomModel");
@@ -600,18 +720,6 @@ SetAttributes(iClient, iHealth = 3000, Float:flSpeed = 0.5, Float:flForceReduct,
 
 RemoveAttributes(iClient)
 {
-	TF2Attrib_RemoveByName(iClient, "damage force reduction");
-	TF2Attrib_RemoveByName(iClient, "health from packs decreased");
-	TF2Attrib_RemoveByName(iClient, "move speed bonus");
-	TF2Attrib_RemoveByName(iClient, "airblast vulnerability multiplier");
-	TF2Attrib_RemoveByName(iClient, "overheal fill rate reduced");
-	TF2Attrib_RemoveByName(iClient, "max health additive bonus");
-	TF2Attrib_RemoveByName(iClient, "override footstep sound set");
-	
-	new iWeapon = GetPlayerWeaponSlot(iClient, 0);
-	if(TF2_GetPlayerClass(iClient)==TFClass_Heavy)
-		TF2Attrib_RemoveByName(iWeapon, "aiming movespeed increased");
-		
 	TF2_RegeneratePlayer(iClient);
 }
 
